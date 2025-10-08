@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   mosquitto:
     image: eclipse-mosquitto:latest
@@ -14,10 +13,6 @@ services:
     restart: unless-stopped
     networks:
       - advanced_data_management
-
-networks:
-  advanced_data_management:
-    driver: bridge
 
   redis:
     image: redis/redis-stack:latest
@@ -35,3 +30,7 @@ networks:
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  advanced_data_management:
+    driver: bridge
