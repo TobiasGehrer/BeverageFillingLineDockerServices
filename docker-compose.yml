@@ -13,8 +13,25 @@ services:
       - ./mosquitto/log:/mosquitto/log
     restart: unless-stopped
     networks:
-      - mqtt-network
+      - advanced_data_management
 
 networks:
-  mqtt-network:
+  advanced_data_management:
     driver: bridge
+
+  redis:
+    image: redis/redis-stack:latest
+    container_name: redis
+    ports:
+      - "6379:6379"  # Redis port
+      - "8001:8001"  # RedisInsight port
+    volumes:
+      - ./redis/data:/data
+    restart: unless-stopped
+    networks:
+      - advanced_data_management
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
