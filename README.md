@@ -1,83 +1,75 @@
-# Mosquitto MQTT Broker
+# Docker Services
 
-MQTT message broker that receives data from the OPC UA bridge and distributes it to subscribers.
+Data infrastructure stack for receiving and storing process data from the OPC UA bridge.
 
-## What It Does
+**1. Mosquitto MQTT Broker**
+- Receives messages from OPC UA bridge (port 1883)
+- Distributes data to subscribers
+- WebSocket support on port 9001
 
-Mosquitto acts as a message hub:
-1. Receives messages from the OPC UA bridge
-2. Stores them temporarily
-3. Forwards them to any subscribers (MQTT Explorer, dashboards, analytics tools)
+**2. Redis Stack**
+- Stores current state of all metrics (port 6379)
+- RedisInsight web UI for visualization (port 8001)
+- Data organized by production line
 
-It runs on port **1883** and handles ~5 messages every 3 seconds from the bridge.
+**3. Redis Hydration (Redpanda Connect)**
+- Subscribes to MQTT topics
+- Transforms messages and writes to Redis
+- Maps UNS topics to Redis hash structures
+
+
+```
+OPC UA Bridge → MQTT Broker → Redis Hydration → Redis
+                    ↓
+              Subscribers
+```
+
+The bridge publishes 42 metrics to MQTT. Redis Hydration listens to these MQTT messages and stores them in Redis, grouped by production line.
+
+**Example:**
+- Topic: `v1/best-beverage/vienna/production/filling-line-1/machine_status`
+- Redis: Key `filling-line-1`, Field `machine_status`, Value `{"timestamp":"...","value":"Running"}`
 
 ## Setup
 
 ### Directory Structure
-
 ```bash
-mkdir -p mosquitto-mqtt/mosquitto/{config,data,log}
-cd mosquitto-mqtt
+mkdir -p mosquitto/{config,data,log} redis/data
 ```
 
-### Create `mosquitto/config/mosquitto.conf`
-
-```conf
-persistence true
-persistence_location /mosquitto/data/
-log_dest file /mosquitto/log/mosquitto.log
-log_dest stdout
-
-listener 1883
-protocol mqtt
-allow_anonymous true
-
-listener 9001
-protocol websockets
-allow_anonymous true
-```
-
-### Create `docker-compose.yml`
-
-```yaml
-version: '3.8'
-
-services:
-  mosquitto:
-    image: eclipse-mosquitto:latest
-    container_name: mosquitto-broker
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mosquitto/config:/mosquitto/config
-      - ./mosquitto/data:/mosquitto/data
-      - ./mosquitto/log:/mosquitto/log
-    restart: unless-stopped
-```
+### Files Needed
+- `docker-compose.yml` - Service definitions
+- `redis_hydration.yaml` - MQTT to Redis pipeline config
+- `mosquitto/config/mosquitto.conf` - MQTT broker config
 
 ## Usage
 
 ```bash
-# Start
+# Start all services
 docker-compose up -d
 
-# Check status
-docker ps | grep mosquitto
-
 # View logs
-docker logs mosquitto-broker
+docker-compose logs -f
 
-# Stop
+# Stop services
 docker-compose stop
+
+# Restart services
+docker-compose restart
 ```
 
-## Testing
+## Verify It's Working
 
+**Check MQTT:**
 ```bash
-# Subscribe to all topics
 mosquitto_sub -h localhost -t "#" -v
-
-# Test publish
-mosquitto_pub -h localhost -t "test" -m "Hello"
 ```
+
+**Check Redis:**
+```bash
+docker exec -it redis redis-cli
+> HGETALL filling-line-1
+```
+
+**Access RedisInsight:**
+Open browser to `http://localhost:8001`

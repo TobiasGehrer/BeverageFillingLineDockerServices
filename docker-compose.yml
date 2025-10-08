@@ -1,28 +1,31 @@
-version: '3.8'
 services:
   mqtt:
     image: eclipse-mosquitto:latest
     container_name: mosquitto-broker
+    restart: unless-stopped
     ports:
-      - "1883:1883"      # MQTT port
-      - "9001:9001"      # WebSocket port
+      - "1883:1883"      # MQTT port      
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
-    restart: unless-stopped
     networks:
       - advanced_data_management
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis/redis-stack:latest
     container_name: redis
+    restart: unless-stopped
     ports:
       - "6379:6379"  # Redis port
       - "8001:8001"  # RedisInsight port
     volumes:
-      - ./redis/data:/data
-    restart: unless-stopped
+      - ./redis/data:/data  
     networks:
       - advanced_data_management
     logging:
@@ -46,7 +49,7 @@ services:
     networks:
       - advanced_data_management
     volumes:
-      - ./redis_hydration.yaml:/connector.yaml
+      - ./redis_hydration.yaml:/connect.yaml
 
 networks:
   advanced_data_management:

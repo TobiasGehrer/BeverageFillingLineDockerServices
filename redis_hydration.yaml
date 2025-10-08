@@ -1,19 +1,22 @@
 input:
   label: "mqtt_in"
   mqtt:
-    server: "mqtt://mosquitto-broker:1883"
-  client_id: "7db60160-21f7-4814-9f13-4a83cd71fb35"
-  keepalive: 60
-  clean_session: true
-  topics:
-    - topic: "v1/best-beverage/+/+/+/+"
+    urls:
+      - "tcp://mosquitto-broker:1883"
+    client_id: "7db60160-21f7-4814-9f13-4a83cd71fb35"
+    keepalive: 60
+    clean_session: true
+    topics:
+      - "v1/best-beverage/+/+/+/+"
 
 pipeline:
   processors:
     - mapping: |
         root = this
-        root.field = meta("topic").split("/").index(-1)
-        root.key = meta("topic").split("/").index(-2)
+        root.field = meta("mqtt_topic").split("/").index(-1)
+        root.key = meta("mqtt_topic").split("/").index(-2)
+        meta key = root.key
+        
     - mapping: |
         root = { this.field: this.value.string() }
 
@@ -24,4 +27,3 @@ output:
     key: ${! meta("key") }
     walk_metadata: false
     walk_json_object: true
-
