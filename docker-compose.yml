@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-  mosquitto:
+  mqtt:
     image: eclipse-mosquitto:latest
     container_name: mosquitto-broker
     ports:
@@ -30,6 +30,23 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  redis_hydration:
+    image: docker.redpanda.com/redpandadata/connect:latest
+    container_name: redis_hydration
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - mqtt
+      - redis
+    networks:
+      - advanced_data_management
+    volumes:
+      - ./redis_hydration.yaml:/connector.yaml
 
 networks:
   advanced_data_management:
