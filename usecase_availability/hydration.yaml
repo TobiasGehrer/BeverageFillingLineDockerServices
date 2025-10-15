@@ -1,0 +1,32 @@
+# Simple MQTT to Kafka pipeline without enrichment
+# Useful for high-throughput scenarios or when enrichment is not needed
+
+input:
+  label: "mqtt_in"
+  mqtt:
+    urls:
+      - "tcp://mosquitto-broker:1883"
+    client_id: "availability-pipeline-c8d4e2f1-9a7b-4e3c-91d2-f5e8a3b6c4d7"
+    keepalive: 60
+    clean_session: true
+    topics:
+      # Subscribe to all beverage filling line topics
+      - "v1/best-beverage/#"
+
+pipeline:
+  processors:
+    # Simple passthrough with metadata
+    - mapping: |
+        root = this
+        root.mqtt_topic = meta("mqtt_topic")
+        root.ingestion_timestamp = now()
+
+output:
+  label: "kafka_out"
+  kafka:
+    addresses:
+      - "redpanda_broker:9092"
+    topic: "beverage_filling_raw"
+    key: ${! meta("mqtt_topic") }
+    max_in_flight: 10
+    compression: snappy
