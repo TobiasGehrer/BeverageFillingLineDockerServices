@@ -1,123 +1,152 @@
-# Beverage Filling Line - Data Infrastructure
-
-A complete data infrastructure stack for processing and enriching beverage filling line data using MQTT, Redis, and Kafka (Redpanda).
-
-## Architecture Overview
-
-This setup creates a data pipeline that:
-1. **Receives** real-time data from the OPC UA server via MQTT
-2. **Stores** contextual data (production orders, machine info) in Redis
-3. **Enriches** streaming metrics with production context
-4. **Publishes** enriched data to Kafka topics for analytics and monitoring
-
-## Services
-
-| Service | Purpose | Ports |
-|---------|---------|-------|
-| **Mosquitto** | MQTT broker for receiving OPC UA data | 1883 |
-| **Redis** | Key-value store for production context | 6379, 8001 (RedisInsight) |
-| **Redpanda** | Kafka-compatible streaming platform | 19092 (Kafka), 18081 (Schema Registry) |
-| **Redpanda Console** | Web UI for Kafka topics and messages | 8080 |
-| **Redis Hydration** | Syncs MQTT data to Redis hash maps | - |
-| **Enrichment Pipeline** | Enriches metrics with production context | - |
-| **Availability Pipeline** | Simple MQTT to Kafka passthrough | - |
+# Beverage Filling Line - Startup Guide
 
 ## Prerequisites
+- .NET 8.0 SDK
+- Docker Desktop
 
-- Docker and Docker Compose
-- Running OPC UA server (see BeverageFillingLineOpcServer)
-- Running OPC-MQTT bridge (see BeverageFillingLineOpcMqttBridge)
-
-## Quick Start
-
-1. **Create required directories:**
-```bash
-mkdir -p mosquitto/config mosquitto/data mosquitto/log redis/data
+## Folder Structure
+```
+Datenbanken/
+├── BeverageFillingLineOpcServer/
+├── BeverageFillingLineOpcMqttBridge/
+├── BeverageFillingLineDockerServices/
+└── BeverageFillingLineKafkaTimescaledbBridge/
 ```
 
-2. **Create Mosquitto configuration:**
-```bash
-echo "listener 1883" > mosquitto/config/mosquitto.conf
-echo "allow_anonymous true" >> mosquitto/config/mosquitto.conf
-```
+## Startup Sequence
 
-3. **Start all services:**
+### 1. Start Docker Services
 ```bash
+cd Datenbanken/BeverageFillingLineDockerServices
 docker-compose up -d
 ```
 
-4. **Verify services are running:**
+Wait 30 seconds for all services to initialize.
+
+**Verify services are running:**
 ```bash
 docker-compose ps
 ```
 
-## Data Flow
-
-```
-OPC UA Server → MQTT Bridge → MQTT Broker (Mosquitto)
-                                    ↓
-                           ┌────────┴────────┐
-                           ↓                 ↓
-                    Redis Hydration   Enrichment Pipeline
-                           ↓                 ↓
-                    Redis Cache       Kafka (Redpanda)
-                           ↑                 ↓
-                           └─────────────────┘
-```
-
-## Access Points
-
-- **RedisInsight**: http://localhost:8001 - Browse Redis data
-- **Redpanda Console**: http://localhost:8080 - View Kafka topics and messages
-- **Kafka API**: localhost:19092 - Connect applications
-- **MQTT Broker**: localhost:1883 - Publish/subscribe to topics
-
-## Kafka Topics
-
-- `beverage_filling_raw` - Raw MQTT data without enrichment
-- `beverage_filling_enriched` - Metrics enriched with production context from Redis
-
-## UNS Topic Structure
-
-The system follows Unified Namespace (UNS) conventions:
-```
-v1/best-beverage/dornbirn/production/filling-line-1/{metric_name}
-```
-
-## Redis Data Structure
-
-Production context is stored in Redis as hash maps with the line identifier as the key:
-- Key: `filling-line-1`
-- Fields: `production_order`, `production_article`, `machine_name`, `machine_serial_number`, etc.
-
-## Enrichment Process
-
-The enrichment pipeline:
-1. Subscribes to key MQTT metrics (machine_status, fill_volume, alarms, counters)
-2. Extracts line identifier from the MQTT topic
-3. Looks up production context from Redis using the line identifier
-4. Combines metric data with production context
-5. Publishes enriched messages to Kafka
-
-## Stopping Services
-
+### 2. Start OPC UA Server
 ```bash
+cd Datenbanken/BeverageFillingLineOpcServer
+dotnet run
+```
+
+**Expected output:**
+```
+Server started at: opc.tcp://localhost:4840
+Press any key to exit...
+```
+
+### 3. Start OPC-MQTT Bridge
+Open a new terminal:
+```bash
+cd Datenbanken/BeverageFillingLineOpcMqttBridge
+dotnet run
+```
+
+**Expected output:**
+```
+Connected to OPC UA server
+Connected to MQTT broker
+Bridge active. Publishing every 3 seconds...
+```
+
+### 4. Start Kafka-TimescaleDB Bridge
+Open a new terminal:
+```bash
+cd Datenbanken/BeverageFillingLineKafkaTimescaledbBridge
+dotnet run
+```
+
+**Expected output:**
+```
+✓ Database connection successful
+Subscribed to topic: beverage_metrics
+[HH:mm:ss] Processed X messages (batch: 100)
+```
+
+## Web Interfaces
+
+| Interface | URL | Credentials |
+|-----------|-----|-------------|
+| Redpanda Console | http://localhost:8080 | None |
+| RedisInsight | http://localhost:8001 | None |
+| pgAdmin | http://localhost:5050 | admin@admin.com / admin123 |
+
+## Verify Data Flow
+
+### 1. Check MQTT Messages (Redpanda Console)
+- Open: http://localhost:8080
+- Go to: **Topics** → `beverage_metrics`
+- Should see messages flowing
+
+### 2. Check Redis (RedisInsight)
+- Open: http://localhost:8001
+- Connect to: `localhost:6379`
+- Browse key: `filling-line-1`
+- Should see ~40 fields with latest values
+
+### 3. Check Database (pgAdmin)
+- Open: http://localhost:5050
+- Login: `admin@admin.com` / `admin123`
+- **First time only:** Add server:
+  - Name: TimescaleDB
+  - Host: `timescaledb`
+  - Port: 5432
+  - Database: `beverage_data`
+  - User: `admin`
+  - Password: `admin123`
+
+**Run test query:**
+```sql
+SELECT COUNT(*), MAX(time) FROM beverage_metrics;
+```
+
+Should show growing record count.
+
+## Shutdown
+
+### Stop all services:
+```bash
+# Stop .NET applications (in each terminal)
+Ctrl + C
+
+# Stop Docker services
+cd Datenbanken/BeverageFillingLineDockerServices
 docker-compose down
 ```
 
-To remove all data:
+### Remove all data (optional):
 ```bash
 docker-compose down -v
 ```
 
-## Monitoring
+## Troubleshooting
 
-View logs for any service:
+**No data in database?**
+1. Check all 4 applications are running
+2. Verify Kafka has messages: http://localhost:8080 → Topics
+3. Check C# bridge logs for errors
+
+**Container keeps restarting?**
 ```bash
-docker-compose logs -f <service_name>
+docker-compose logs [container-name]
 ```
 
-Example:
+**Port already in use?**
 ```bash
-docker-compose logs -f enrichment_pipeline
+# Check what's using the port
+netstat -ano | findstr :1883
+netstat -ano | findstr :5432
 ```
+
+## Normal Startup Order
+1. Docker (30s)
+2. OPC Server (instant)
+3. OPC-MQTT Bridge (instant)
+4. Kafka-TimescaleDB Bridge (instant)
+
+**Total startup time: ~1 minute**

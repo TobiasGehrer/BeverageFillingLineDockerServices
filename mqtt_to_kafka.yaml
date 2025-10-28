@@ -1,0 +1,48 @@
+input:
+  label: "mqtt_in"
+  mqtt:
+    urls:
+      - "tcp://mosquitto-broker:1883"
+    client_id: "mqtt-kafka-bridge-client"
+    keepalive: 60
+    clean_session: true
+    topics:
+      - "v1/best-beverage/#"
+
+pipeline:
+  processors:
+    - mapping: |
+        root.timestamp = this.timestamp
+        root.metric = meta("mqtt_topic").split("/").index(-1)
+        root.value = this.value
+        root.line = meta("mqtt_topic").split("/").index(-2)
+        
+    - branch:
+        request_map: 'root = if this.metric.re_match("(machine_status|production_order|alarms_active|counters_.*|process_.*)") { this.line }'
+        processors:
+          - redis:
+              url: "redis://redis:6379"
+              command: hmget
+              args_mapping: |
+                root = [ 
+                  this,
+                  "production_order",
+                  "production_article",
+                  "machine_name",
+                  "machine_plant"
+                ]
+        result_map: |
+          root.production_order = this.0
+          root.article = this.1
+          root.machine_name = this.2
+          root.plant = this.3
+
+output:
+  label: "kafka_out"
+  kafka:
+    addresses:
+      - "redpanda:9092"
+    topic: "beverage_metrics"
+    key: ${! this.line + "_" + this.metric }
+    max_in_flight: 10
+    compression: snappy

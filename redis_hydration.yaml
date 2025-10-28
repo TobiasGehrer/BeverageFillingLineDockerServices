@@ -3,7 +3,7 @@ input:
   mqtt:
     urls:
       - "tcp://mosquitto-broker:1883"
-    client_id: "7db60160-21f7-4814-9f13-4a83cd71fb35"
+    client_id: "redis-hydration-client"
     keepalive: 60
     clean_session: true
     topics:
@@ -12,13 +12,13 @@ input:
 pipeline:
   processors:
     - mapping: |
-        root = this
         root.field = meta("mqtt_topic").split("/").index(-1)
         root.key = meta("mqtt_topic").split("/").index(-2)
+        root.value = this.value.string()
         meta key = root.key
         
     - mapping: |
-        root = { this.field: this.value.string() }
+        root = { this.field: this.value }
 
 output:
   label: "redis_out"

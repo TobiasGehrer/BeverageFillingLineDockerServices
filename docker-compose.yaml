@@ -4,13 +4,13 @@ services:
     container_name: mosquitto-broker
     restart: unless-stopped
     ports:
-      - "1883:1883"      # MQTT port      
+      - "1883:1883"      
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
     networks:
-      - advanced_data_management
+      - beverage_network
     logging:
       driver: "json-file"
       options:
@@ -22,12 +22,12 @@ services:
     container_name: redis
     restart: unless-stopped
     ports:
-      - "6379:6379"  # Redis port
-      - "8001:8001"  # RedisInsight port
+      - "6379:6379"
+      - "8001:8001"
     volumes:
       - ./redis/data:/data  
     networks:
-      - advanced_data_management
+      - beverage_network
     logging:
       driver: "json-file"
       options:
@@ -38,18 +38,18 @@ services:
     image: docker.redpanda.com/redpandadata/connect:latest
     container_name: redis_hydration
     restart: unless-stopped
+    depends_on:
+      - mqtt
+      - redis
+    networks:
+      - beverage_network
+    volumes:
+      - ./redis_hydration.yaml:/connect.yaml
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    depends_on:
-      - mqtt
-      - redis
-    networks:
-      - advanced_data_management
-    volumes:
-      - ./redis_hydration.yaml:/connect.yaml
 
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
@@ -69,14 +69,14 @@ services:
       - --smp 1
       - --default-log-level=info
     ports:
-      - "18081:18081"  # Schema Registry (external)
-      - "18082:18082"  # Pandaproxy (external)
-      - "19092:19092"  # Kafka API (external)
-      - "19644:9644"   # Admin API
+      - "18081:18081"
+      - "18082:18082"
+      - "19092:19092"
+      - "19644:9644"
     volumes:
       - redpanda_data:/var/lib/redpanda/data
     networks:
-      - advanced_data_management    
+      - beverage_network
     logging:
       driver: "json-file"
       options:
@@ -106,44 +106,65 @@ services:
     depends_on:
       - redpanda        
     networks:
-      - advanced_data_management
+      - beverage_network
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  # Task 2: MQTT to Kafka bridge with Redis enrichment
-  enrichment_pipeline:
+  mqtt_to_kafka:
     image: docker.redpanda.com/redpandadata/connect:latest
-    container_name: enrichment_pipeline
+    container_name: mqtt_to_kafka
     restart: unless-stopped
     volumes:
-      - ./usecase_enrichment/hydration.yaml:/connect.yaml
+      - ./mqtt_to_kafka.yaml:/connect.yaml
     depends_on:
       - mqtt
       - redis
       - redpanda
     networks:
-      - advanced_data_management
+      - beverage_network
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  # Optional: Simple MQTT to Kafka bridge without enrichment
-  availability_hydration:
-    image: docker.redpanda.com/redpandadata/connect:latest
-    container_name: availability_hydration
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: timescaledb
     restart: unless-stopped
+    environment:
+      POSTGRES_DB: beverage_data
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5432:5432"
     volumes:
-      - ./usecase_availability/hydration.yaml:/connect.yaml
-    depends_on:
-      - mqtt
-      - redpanda
+      - timescale_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - advanced_data_management
+      - beverage_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - beverage_network
     logging:
       driver: "json-file"
       options:
@@ -151,9 +172,11 @@ services:
         max-file: "3"
 
 networks:
-  advanced_data_management:
+  beverage_network:
     driver: bridge
 
 volumes:
+  redis_data:
   redpanda_data:
-    driver: local
+  timescale_data:
+  pgadmin_data:
