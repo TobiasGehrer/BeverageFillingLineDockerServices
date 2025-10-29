@@ -171,6 +171,28 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_INSTALL_PLUGINS: marcusolsson-dynamictext-panel,volkovlabs-echarts-panel
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/data:/var/lib/grafana
+    depends_on:
+      - timescaledb
+    networks:
+      - beverage_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   beverage_network:
     driver: bridge
@@ -180,3 +202,4 @@ volumes:
   redpanda_data:
   timescale_data:
   pgadmin_data:
+  grafana_data:

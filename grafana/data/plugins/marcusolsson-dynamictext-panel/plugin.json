@@ -1,0 +1,44 @@
+{
+  "$schema": "https://github.com/grafana/grafana/raw/main/docs/sources/developers/plugins/plugin.schema.json",
+  "dependencies": {
+    "grafanaDependency": ">=11.0.0",
+    "plugins": []
+  },
+  "id": "marcusolsson-dynamictext-panel",
+  "info": {
+    "author": {
+      "name": "Volkov Labs",
+      "url": "https://volkovlabs.io"
+    },
+    "description": "Data-driven text with Markdown and Handlebars support",
+    "keywords": ["text", "markdown", "handlebars"],
+    "links": [
+      {
+        "name": "Documentation",
+        "url": "https://volkovlabs.io/plugins/business-text/"
+      },
+      {
+        "name": "GitHub",
+        "url": "https://github.com/volkovlabs/business-text"
+      },
+      {
+        "name": "Sponsor",
+        "url": "https://volkovlabs.io/pricing/"
+      }
+    ],
+    "logos": {
+      "large": "img/logo.svg",
+      "small": "img/logo.svg"
+    },
+    "screenshots": [
+      {
+        "name": "Panel",
+        "path": "img/screenshot.png"
+      }
+    ],
+    "updated": "2025-07-21",
+    "version": "6.0.0"
+  },
+  "name": "Business Text",
+  "type": "panel"
+}
